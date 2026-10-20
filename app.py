@@ -61,33 +61,62 @@ def current_owner():
     oid = session.get("owner_id")
     return db.session.get(Owner, oid) if oid else None
 
-# ---------- Главная страница (Вход) ----------
+# ---------- Главная страница (Вход и Регистрация) ----------
 @app.route("/", methods=["GET", "POST"])
 def index():
     tag_code = request.args.get("tag")
+    is_register = request.args.get("register") == "1"  # Флаг для переключения на вкладку регистрации
     
     if request.method == "POST":
-        email = request.form["email"].strip().lower()
-        pwd = request.form["password"]
-        
-        # Проверка на админа
-        if email == ADMIN_EMAIL.lower() and pwd == ADMIN_PASSWORD:
-            session["is_admin"] = True
-            session.pop("owner_id", None) # Сбрасываем владельца, если был
-            return redirect(url_for("admin"))
-        
-        # Проверка на владельца
-        owner = Owner.query.filter_by(email=email).first()
-        if owner and check_password_hash(owner.password_hash, pwd):
-            session["owner_id"] = owner.id
-            session.pop("is_admin", None)
+        action = request.form.get("action")
+        email = request.form.get("email", "").strip().lower()
+        pwd = request.form.get("password", "")
+
+        # --- Логика ВХОДА ---
+        if action == "login":
+            if email == ADMIN_EMAIL.lower() and pwd == ADMIN_PASSWORD:
+                session["is_admin"] = True
+                session.pop("owner_id", None)
+                return redirect(url_for("admin"))
+            
+            owner = Owner.query.filter_by(email=email).first()
+            if owner and check_password_hash(owner.password_hash, pwd):
+                session["owner_id"] = owner.id
+                session.pop("is_admin", None)
+                if tag_code:
+                    return redirect(url_for("owner_dashboard", activate_tag=tag_code))
+                return redirect(url_for("owner_dashboard"))
+                
+            flash("Неверный email или пароль")
+            return redirect(url_for("index", tag=tag_code, register=1))
+
+        # --- Логика РЕГИСТРАЦИИ ---
+        elif action == "register":
+            name = request.form.get("name", "").strip()
+            phone = request.form.get("phone", "").strip()
+            
+            if Owner.query.filter_by(email=email).first():
+                flash("Пользователь с таким email уже существует. Попробуйте войти.")
+                return redirect(url_for("index", tag=tag_code))
+            
+            new_owner = Owner(
+                email=email, 
+                password_hash=generate_password_hash(pwd),
+                name=name,
+                phone=phone
+            )
+            db.session.add(new_owner)
+            db.session.commit()
+            
+            # Автоматически логиним
+            session["owner_id"] = new_owner.id
+            flash("Регистрация успешна! Привяжите метку к питомцу.")
+            
             if tag_code:
                 return redirect(url_for("owner_dashboard", activate_tag=tag_code))
             return redirect(url_for("owner_dashboard"))
-            
-        flash("Неверный email или пароль")
         
-    return render_template("index.html", tag_code=tag_code)
+    return render_template("index.html", tag_code=tag_code, is_register=is_register)
 
 # ---------- Умный роутинг для NFC ----------
 @app.route("/tag/<code>")
@@ -99,7 +128,6 @@ def tag_redirect(code):
     if tag.pet_id:
         return redirect(url_for("pet_page", slug=tag.pet.slug))
     else:
-        # Если не активирована, отправляем на главную с параметром
         return redirect(url_for("index", tag=code))
 
 @app.route("/p/<slug>")
@@ -140,6 +168,9 @@ def owner_dashboard():
 def owner_logout():
     session.pop("owner_id", None)
     return redirect(url_for("index"))
+
+# ... (Остальные маршруты владельца и админа оставляем без изменений) ...
+# (activate_tag, owner_edit, delete_find, admin, admin_new_owner, admin_new_tag)
 
 @app.route("/owner/activate/<code>", methods=["POST"])
 def activate_tag(code):
@@ -195,7 +226,6 @@ def delete_find(find_id):
     db.session.commit()
     return redirect(url_for("owner_dashboard"))
 
-# ---------- Админка ----------
 @app.route("/admin", methods=["GET"])
 def admin():
     if not session.get("is_admin"):
@@ -229,7 +259,6 @@ def admin_new_owner():
 def admin_new_tag():
     if not session.get("is_admin"):
         abort(403)
-    # Генерируем сложный код: PN-XXXX-XXXX-XXXX
     part1 = secrets.token_hex(2).upper()
     part2 = secrets.token_hex(2).upper()
     part3 = secrets.token_hex(2).upper()
