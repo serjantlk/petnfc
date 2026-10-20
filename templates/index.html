@@ -6,16 +6,57 @@
   
   {% if tag_code %}
     <div class="flash" style="background:#dcfce7; color:#166534; text-align: center;">
-      Вы приложили метку <b>{{ tag_code }}</b>.<br>Войдите, чтобы привязать её к питомцу.
+      Вы приложили метку <b>{{ tag_code }}</b>.<br>Войдите или зарегистрируйтесь, чтобы привязать её.
     </div>
   {% endif %}
 
-  <form method="post" style="margin-top: 20px;">
-    <label>Email или логин</label>
-    <input name="email" type="text" required placeholder="Ваш email">
-    <label>Пароль</label>
-    <input name="password" type="password" required placeholder="Ваш пароль">
-    <button style="width: 100%;">Войти</button>
-  </form>
+  <!-- Переключатель вкладок -->
+  <div style="display: flex; margin-bottom: 20px; border-bottom: 1px solid #ddd;">
+    <button id="tab-login" onclick="showTab('login')" style="flex:1; background:none; color:#2563eb; border:none; border-bottom:2px solid #2563eb; padding:10px; font-weight:bold; cursor:pointer;">Вход</button>
+    <button id="tab-register" onclick="showTab('register')" style="flex:1; background:none; color:#666; border:none; border-bottom:2px solid transparent; padding:10px; font-weight:bold; cursor:pointer;">Регистрация</button>
+  </div>
+
+  <!-- Форма ВХОДА -->
+  <div id="form-login" style="display: {% if is_register %}none{% else %}block{% endif %};">
+    <form method="post">
+      <input type="hidden" name="action" value="login">
+      {% if tag_code %}<input type="hidden" name="tag" value="{{ tag_code }}">{% endif %}
+      <label>Email</label>
+      <input name="email" type="email" required placeholder="Ваш email">
+      <label>Пароль</label>
+      <input name="password" type="password" required placeholder="Ваш пароль">
+      <button style="width: 100%;">Войти</button>
+    </form>
+  </div>
+
+  <!-- Форма РЕГИСТРАЦИИ -->
+  <div id="form-register" style="display: {% if is_register %}block{% else %}none{% endif %};">
+    <form method="post">
+      <input type="hidden" name="action" value="register">
+      {% if tag_code %}<input type="hidden" name="tag" value="{{ tag_code }}">{% endif %}
+      <label>Имя</label>
+      <input name="name" type="text" placeholder="Как к вам обращаться?">
+      <label>Email</label>
+      <input name="email" type="email" required placeholder="you@example.com">
+      <label>Телефон</label>
+      <input name="phone" type="tel" placeholder="+7 (999) 123-45-67">
+      <label>Пароль</label>
+      <input name="password" type="password" required placeholder="Придумайте пароль">
+      <button style="width: 100%; background:#16a34a;">Зарегистрироваться</button>
+    </form>
+  </div>
 </div>
+
+<script>
+  function showTab(tab) {
+    document.getElementById('form-login').style.display = tab === 'login' ? 'block' : 'none';
+    document.getElementById('form-register').style.display = tab === 'register' ? 'block' : 'none';
+    
+    document.getElementById('tab-login').style.borderBottomColor = tab === 'login' ? '#2563eb' : 'transparent';
+    document.getElementById('tab-login').style.color = tab === 'login' ? '#2563eb' : '#666';
+    
+    document.getElementById('tab-register').style.borderBottomColor = tab === 'register' ? '#2563eb' : 'transparent';
+    document.getElementById('tab-register').style.color = tab === 'register' ? '#2563eb' : '#666';
+  }
+</script>
 {% endblock %}
