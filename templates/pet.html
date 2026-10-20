@@ -1,27 +1,52 @@
 {% extends "base.html" %}
-{% block title %}{{ pet.name }} — паспорт питомца{% endblock %}
+{% block title %}{{ pet.name }} — Потерялся!{% endblock %}
 {% block content %}
-<div class="card">
-  <h1>{{ pet.name }}</h1>
-  {% if pet.photo_url %}<img class="pet" src="{{ pet.photo_url }}" alt="{{ pet.name }}">{% endif %}
-  <p><b>Вид:</b> {{ pet.species or "—" }}<br>
-     <b>Порода:</b> {{ pet.breed or "—" }}<br>
-     <b>Окрас:</b> {{ pet.color or "—" }}</p>
-  {% if pet.notes %}<p><b>Особенности:</b> {{ pet.notes }}</p>{% endif %}
+
+<!-- Шапка с предупреждением -->
+<div class="card text-center" style="background: #fff1f2; border-color: #fecdd3;">
+  <h1 style="color: #be123c; margin-bottom: 8px;">Я потерялся!</h1>
+  <p class="muted" style="color: #9f1239; margin-bottom: 0;">Пожалуйста, помогите мне вернуться домой</p>
 </div>
 
-<div class="card">
-  <h2>Владелец</h2>
-  <p><b>{{ pet.owner.name or "Владелец" }}</b><br>
-     Телефон: <a href="tel:{{ pet.owner.phone }}">{{ pet.owner.phone or "—" }}</a><br>
-     Email: <a href="mailto:{{ pet.owner.email }}">{{ pet.owner.email }}</a></p>
+<!-- Карточка с фото и кличкой -->
+<div class="card text-center">
+  {% if pet.photo_url %}
+    <img class="pet-photo" src="{{ pet.photo_url }}" alt="{{ pet.name }}">
+  {% else %}
+    <div style="height: 120px; background: #f1f5f9; border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-bottom: 16px; font-size: 48px;">🐾</div>
+  {% endif %}
+  
+  <h2 style="margin-bottom: 4px;">{{ pet.name }}</h2>
+  <p class="muted" style="margin-bottom: 16px;">
+    {{ pet.species or "Питомец" }} {% if pet.breed %}• {{ pet.breed }}{% endif %} {% if pet.color %}• {{ pet.color }}{% endif %}
+  </p>
+
+  {% if pet.notes %}
+    <div style="background: #f8fafc; padding: 16px; border-radius: 12px; text-align: left; font-size: 15px;">
+      <b>Важная информация:</b><br>
+      {{ pet.notes }}
+    </div>
+  {% endif %}
 </div>
 
-<div class="card" id="geo-card">
-  <h2>Помогите вернуть питомца</h2>
-  <p class="muted">Нажмите кнопку — мы отправим владельцу координаты, где вы нашли питомца.</p>
-  <button id="send-loc">Отправить моё местоположение</button>
-  <p id="geo-status" class="muted"></p>
+<!-- Карточка владельца -->
+<div class="card">
+  <h3>Контакты владельца</h3>
+  <p style="font-size: 18px; font-weight: 600; margin-bottom: 16px;">{{ pet.owner.name or "Владелец" }}</p>
+  
+  <a href="tel:{{ pet.owner.phone }}" class="btn" style="background: #0f172a; margin-bottom: 12px; text-decoration: none;">
+    📞 Позвонить: {{ pet.owner.phone or "—" }}
+  </a>
+</div>
+
+<!-- Блок геолокации -->
+<div class="card" id="geo-card" style="border: 2px solid var(--primary); background: #eef2ff;">
+  <h3 class="text-center" style="color: var(--primary);">Где вы меня нашли?</h3>
+  <p class="muted text-center" style="margin-bottom: 20px;">
+    Нажмите кнопку ниже, чтобы автоматически отправить владельцу координаты этого места.
+  </p>
+  <button id="send-loc" class="success" style="font-size: 18px; padding: 20px;">📍 Отправить геолокацию</button>
+  <p id="geo-status" class="text-center" style="font-weight: 500; margin-top: 16px; margin-bottom: 0;"></p>
 </div>
 
 <script>
@@ -30,38 +55,58 @@ const btn = document.getElementById("send-loc");
 const status = document.getElementById("geo-status");
 
 async function sendLocation(lat, lon, accuracy) {
-  const r = await fetch("/api/find/" + slug, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({lat, lon, accuracy})
-  });
-  if (r.ok) {
-    status.textContent = "Спасибо! Координаты отправлены владельцу.";
-    btn.disabled = true;
-  } else {
-    status.textContent = "Не удалось отправить. Попробуйте ещё раз.";
+  status.style.color = "var(--text-muted)";
+  status.textContent = "Отправляем координаты...";
+  
+  try {
+    const r = await fetch("/api/find/" + slug, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({lat, lon, accuracy})
+    });
+    if (r.ok) {
+      status.style.color = "var(--success)";
+      status.innerHTML = "✅ Спасибо! Координаты отправлены.<br>Владелец уже знает, где я.";
+      btn.style.display = "none"; // Прячем кнопку после успеха
+    } else {
+      status.style.color = "var(--danger)";
+      status.textContent = "Ошибка. Попробуйте еще раз.";
+    }
+  } catch (e) {
+    status.style.color = "var(--danger)";
+    status.textContent = "Нет связи с сервером.";
   }
 }
 
 btn.addEventListener("click", () => {
   if (!navigator.geolocation) {
+    status.style.color = "var(--danger)";
     status.textContent = "Ваш браузер не поддерживает геолокацию.";
     return;
   }
-  status.textContent = "Определяем местоположение…";
+  
+  // Меняем текст на кнопке, пока идет запрос
+  btn.textContent = "⏳ Определяем...";
+  btn.disabled = true;
+
   navigator.geolocation.getCurrentPosition(
     pos => sendLocation(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy),
-    err => { status.textContent = "Доступ к геолокации запрещён или недоступен."; },
+    err => { 
+      status.style.color = "var(--danger)";
+      status.textContent = "Доступ к геолокации запрещён. Разрешите его в настройках браузера.";
+      btn.textContent = "📍 Попробовать снова";
+      btn.disabled = false;
+    },
     {enableHighAccuracy: true, timeout: 10000}
   );
 });
 
-// Автоматическая попытка при загрузке (браузер всё равно спросит разрешение)
+// Автоматическая попытка при загрузке (браузер спросит разрешение)
 window.addEventListener("load", () => {
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
       pos => sendLocation(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy),
-      () => {} // тихо игнорируем отказ
+      () => {} // Молча игнорируем отказ при автозапуске
     );
   }
 });
