@@ -2,12 +2,6 @@
 {% block content %}
 <div class="card">
   <h1>Админка</h1>
-  {% if not logged %}
-  <form method="post">
-    <label>Пароль администратора</label><input name="password" type="password" required>
-    <button>Войти</button>
-  </form>
-  {% else %}
   <p><a href="{{ url_for('admin_logout') }}">Выйти</a></p>
   
   <div style="display:flex; gap:20px; flex-wrap: wrap;">
@@ -26,19 +20,19 @@
       <h3>Генератор NFC-меток</h3>
       <p class="muted">Создайте новую метку и запишите её код в чип.</p>
       <form method="post" action="{{ url_for('admin_new_tag') }}">
-        <button>Сгенерировать новую метку</button>
+        <button>Сгенерировать метку</button>
       </form>
     </div>
   </div>
 
   <hr style="margin: 20px 0;">
 
-  <h3>Список меток</h3>
+  <h3>Последние созданные метки</h3>
   <ul>
     {% for tag in tags %}
       <li>Код: <b>{{ tag.code }}</b> — 
         {% if tag.pet %}
-          Привязана к питомцу <b>{{ tag.pet.name }}</b> (владелец: {{ tag.pet.owner.email }})
+          Привязана к <b>{{ tag.pet.name }}</b> ({{ tag.pet.owner.email }})
         {% else %}
           <span style="color: green;">Свободна</span>
         {% endif %}
@@ -52,6 +46,5 @@
       <li><b>{{ o.email }}</b> — {{ o.name or "—" }}, {{ o.phone or "—" }}; питомцев: {{ o.pets|length }}</li>
     {% endfor %}
   </ul>
-  {% endif %}
 </div>
 {% endblock %}
