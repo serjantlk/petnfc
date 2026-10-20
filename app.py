@@ -24,7 +24,7 @@ class Owner(db.Model):
 class NfcTag(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     code = db.Column(db.String(32), unique=True, nullable=False, index=True)
-    pet_id = db.Column(db.Integer, db.ForeignKey("pet.id"), nullable=True) # Может быть пустым до активации
+    pet_id = db.Column(db.Integer, db.ForeignKey("pet.id"), nullable=True)
     pet = db.relationship("Pet", backref="tags")
 
 class Pet(db.Model):
@@ -52,19 +52,42 @@ class Find(db.Model):
 with app.app_context():
     db.create_all()
 
+# ---------- Настройки админа ----------
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@petnfc.ru")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
+
 # ---------- Хелперы ----------
 def current_owner():
     oid = session.get("owner_id")
     return db.session.get(Owner, oid) if oid else None
 
-def login_required(f):
-    from functools import wraps
-    @wraps(f)
-    def wrapper(*a, **kw):
-        if not current_owner():
-            return redirect(url_for("owner_login", next=request.path))
-        return f(*a, **kw)
-    return wrapper
+# ---------- Главная страница (Вход) ----------
+@app.route("/", methods=["GET", "POST"])
+def index():
+    tag_code = request.args.get("tag")
+    
+    if request.method == "POST":
+        email = request.form["email"].strip().lower()
+        pwd = request.form["password"]
+        
+        # Проверка на админа
+        if email == ADMIN_EMAIL.lower() and pwd == ADMIN_PASSWORD:
+            session["is_admin"] = True
+            session.pop("owner_id", None) # Сбрасываем владельца, если был
+            return redirect(url_for("admin"))
+        
+        # Проверка на владельца
+        owner = Owner.query.filter_by(email=email).first()
+        if owner and check_password_hash(owner.password_hash, pwd):
+            session["owner_id"] = owner.id
+            session.pop("is_admin", None)
+            if tag_code:
+                return redirect(url_for("owner_dashboard", activate_tag=tag_code))
+            return redirect(url_for("owner_dashboard"))
+            
+        flash("Неверный email или пароль")
+        
+    return render_template("index.html", tag_code=tag_code)
 
 # ---------- Умный роутинг для NFC ----------
 @app.route("/tag/<code>")
@@ -74,11 +97,10 @@ def tag_redirect(code):
         return "Метка не найдена или не существует", 404
     
     if tag.pet_id:
-        # Метка активирована -> на страницу питомца
         return redirect(url_for("pet_page", slug=tag.pet.slug))
     else:
-        # Метка не активирована -> на страницу входа/активации
-        return redirect(url_for("owner_login", tag=code))
+        # Если не активирована, отправляем на главную с параметром
+        return redirect(url_for("index", tag=code))
 
 @app.route("/p/<slug>")
 def pet_page(slug):
@@ -100,32 +122,13 @@ def report_find(slug):
     db.session.commit()
     return jsonify({"ok": True})
 
-# ---------- Владелец ----------
-@app.route("/owner/login", methods=["GET", "POST"])
-def owner_login():
-    tag_code = request.args.get("tag") # Получаем код метки из URL, если есть
-    if request.method == "POST":
-        email = request.form["email"].strip().lower()
-        pwd = request.form["password"]
-        owner = Owner.query.filter_by(email=email).first()
-        if owner and check_password_hash(owner.password_hash, pwd):
-            session["owner_id"] = owner.id
-            # Если пришли по метке, перенаправляем на страницу активации
-            if tag_code:
-                return redirect(url_for("owner_dashboard", activate_tag=tag_code))
-            return redirect(url_for("owner_dashboard"))
-        flash("Неверный email или пароль")
-    return render_template("owner_login.html", tag_code=tag_code)
-
-@app.route("/owner/logout")
-def owner_logout():
-    session.pop("owner_id", None)
-    return redirect(url_for("owner_login"))
-
+# ---------- Кабинет Владельца ----------
 @app.route("/owner")
-@login_required
 def owner_dashboard():
     owner = current_owner()
+    if not owner:
+        return redirect(url_for("index"))
+        
     activate_tag = request.args.get("activate_tag")
     tag_to_activate = None
     if activate_tag:
@@ -133,13 +136,19 @@ def owner_dashboard():
     
     return render_template("owner_dashboard.html", owner=owner, tag_to_activate=tag_to_activate)
 
+@app.route("/owner/logout")
+def owner_logout():
+    session.pop("owner_id", None)
+    return redirect(url_for("index"))
+
 @app.route("/owner/activate/<code>", methods=["POST"])
-@login_required
 def activate_tag(code):
     owner = current_owner()
+    if not owner:
+        return redirect(url_for("index"))
+        
     tag = NfcTag.query.filter_by(code=code, pet_id=None).first_or_404()
     
-    # Если у владельца нет питомцев, создаем нового
     if not owner.pets:
         pet_name = request.form.get("pet_name", "Мой питомец")
         slug = secrets.token_urlsafe(8).replace("-", "").replace("_", "")[:10]
@@ -155,30 +164,50 @@ def activate_tag(code):
     flash(f"Метка {code} успешно привязана!")
     return redirect(url_for("owner_dashboard"))
 
-# ... (Остальные роуты owner_edit, owner_new_pet, admin остаются без изменений, 
-# но метод owner_new_pet можно оставить для ручного создания, если нужно) ...
-
-# ---------- Админ ----------
-ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
-
-@app.route("/admin", methods=["GET", "POST"])
-def admin():
+@app.route("/owner/pet/<int:pet_id>/edit", methods=["GET", "POST"])
+def owner_edit(pet_id):
+    owner = current_owner()
+    if not owner:
+        return redirect(url_for("index"))
+        
+    pet = Pet.query.filter_by(id=pet_id, owner_id=owner.id).first_or_404()
     if request.method == "POST":
-        if request.form.get("password") == ADMIN_PASSWORD:
-            session["is_admin"] = True
-        else:
-            flash("Неверный пароль администратора")
-            return redirect(url_for("admin"))
+        pet.name = request.form["name"].strip()
+        pet.species = request.form.get("species", "").strip()
+        pet.breed = request.form.get("breed", "").strip()
+        pet.color = request.form.get("color", "").strip()
+        pet.notes = request.form.get("notes", "").strip()
+        pet.photo_url = request.form.get("photo_url", "").strip()
+        db.session.commit()
+        flash("Сохранено")
+        return redirect(url_for("owner_dashboard"))
+    return render_template("owner_edit.html", pet=pet)
+
+@app.route("/owner/find/<int:find_id>/delete", methods=["POST"])
+def delete_find(find_id):
+    owner = current_owner()
+    if not owner:
+        return redirect(url_for("index"))
+    f = db.session.get(Find, find_id)
+    if not f or f.pet.owner_id != owner.id:
+        abort(403)
+    db.session.delete(f)
+    db.session.commit()
+    return redirect(url_for("owner_dashboard"))
+
+# ---------- Админка ----------
+@app.route("/admin", methods=["GET"])
+def admin():
     if not session.get("is_admin"):
-        return render_template("admin.html", logged=False)
+        return redirect(url_for("index"))
     owners = Owner.query.all()
-    tags = NfcTag.query.all()
-    return render_template("admin.html", logged=True, owners=owners, tags=tags)
+    tags = NfcTag.query.order_by(NfcTag.id.desc()).all()
+    return render_template("admin.html", owners=owners, tags=tags)
 
 @app.route("/admin/logout")
 def admin_logout():
     session.pop("is_admin", None)
-    return redirect(url_for("admin"))
+    return redirect(url_for("index"))
 
 @app.route("/admin/owner/new", methods=["POST"])
 def admin_new_owner():
@@ -200,11 +229,12 @@ def admin_new_owner():
 def admin_new_tag():
     if not session.get("is_admin"):
         abort(403)
-    # Генерируем случайный код для новой метки (например, 0001, 0002)
-    # Для простоты берем следующий ID
-    last_tag = NfcTag.query.order_by(NfcTag.id.desc()).first()
-    next_id = (last_tag.id + 1) if last_tag else 1
-    code = f"{next_id:04d}"
+    # Генерируем сложный код: PN-XXXX-XXXX-XXXX
+    part1 = secrets.token_hex(2).upper()
+    part2 = secrets.token_hex(2).upper()
+    part3 = secrets.token_hex(2).upper()
+    code = f"PN-{part1}-{part2}-{part3}"
+    
     db.session.add(NfcTag(code=code))
     db.session.commit()
     flash(f"Создана новая метка: {code}")
