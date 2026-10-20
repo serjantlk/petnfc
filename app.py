@@ -144,7 +144,7 @@ def delete_find(find_id):
     return redirect(url_for("owner_dashboard"))
 
 # ---------- Админ ----------
-ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "change-me")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123") # Пароль по умолчанию admin123, поменяйте его в переменных окружения!
 
 @app.route("/admin", methods=["GET", "POST"])
 def admin():
@@ -180,5 +180,8 @@ def admin_new_owner():
         flash("Владелец создан")
     return redirect(url_for("admin"))
 
+# ---------- Запуск для SpaceWeb ----------
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Берём порт из переменных окружения хостинга, по умолчанию 5000
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False)
