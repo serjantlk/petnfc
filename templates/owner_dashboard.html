@@ -1,39 +1,84 @@
 {% extends "base.html" %}
 {% block content %}
+<!-- Блок активации метки -->
+{% if tag_to_activate %}
+<div class="card" style="border: 2px solid #2563eb; background: #eff6ff;">
+  <h2>Активация метки {{ tag_to_activate.code }}</h2>
+  <form method="post" action="{{ url_for('activate_tag', code=tag_to_activate.code) }}">
+    {% if not owner.pets %}
+      <p>У вас пока нет питомцев. Создадим первого:</p>
+      <label>Кличка питомца</label>
+      <input name="pet_name" required placeholder="Например, Барсик">
+    {% else %}
+      <p>Выберите питомца, к которому привяжем эту метку:</p>
+      <select name="pet_id" required style="width:100%; padding:8px; margin-bottom:12px;">
+        {% for p in owner.pets %}
+          <option value="{{ p.id }}">{{ p.name }}</option>
+        {% endfor %}
+      </select>
+    {% endif %}
+    <button>Привязать метку</button>
+  </form>
+</div>
+{% endif %}
+
 <div class="card">
   <h1>Мои питомцы</h1>
   <p class="muted">Вы вошли как {{ owner.email }} · <a href="{{ url_for('owner_logout') }}">выйти</a></p>
-  <form method="post" action="{{ url_for('owner_new_pet') }}">
-    <label>Кличка нового питомца</label>
-    <input name="name" required>
-    <button>Добавить питомца</button>
-  </form>
 </div>
 
 {% for pet in owner.pets %}
 <div class="card">
   <h2>{{ pet.name }}</h2>
-  <p class="muted">NFC-ссылка: <code>{{ request.host_url }}p/{{ pet.slug }}</code></p>
+  <p><b>Метки:</b> 
+    {% for tag in pet.tags %}<span style="background:#eee; padding:2px 6px; border-radius:4px;">{{ tag.code }}</span>{% else %}Нет привязанных меток{% endfor %}
+  </p>
   <p><a href="{{ url_for('owner_edit', pet_id=pet.id) }}">Редактировать паспорт</a></p>
 
-  <h3>Находки ({{ pet.finds|length }})</h3>
+  <h3>История находок ({{ pet.finds|length }})</h3>
+  
+  <!-- КОНТЕЙНЕР ДЛЯ КАРТЫ -->
   {% if pet.finds %}
+    <div id="map-{{ pet.id }}" style="height: 300px; border-radius: 12px; margin-bottom: 16px; z-index: 1;"></div>
+    <script>
+      document.addEventListener("DOMContentLoaded", function() {
+        var map = L.map('map-{{ pet.id }}').setView([55.75, 37.61], 10); // Центр по умолчанию (Москва)
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© OpenStreetMap'
+        }).addTo(map);
+
+        var points = [];
+        {% for f in pet.finds if f.lat %}
+          points.push([{{ f.lat }}, {{ f.lon }}]);
+          L.circleMarker([{{ f.lat }}, {{ f.lon }}], {radius: 8, color: 'red', fillColor: '#f03', fillOpacity: 0.8})
+           .addTo(map).bindPopup("{{ f.created_at.strftime('%d.%m %H:%M') }}");
+        {% endfor %}
+
+        // Рисуем линию маршрута, если точек больше одной
+        if (points.length > 1) {
+          var polyline = L.polyline(points, {color: '#2563eb', weight: 3, dashArray: '5, 5'}).addTo(map);
+          map.fitBounds(polyline.getBounds());
+        } else if (points.length === 1) {
+          map.setView(points[0], 15);
+        }
+      });
+    </script>
+
     <table style="width:100%;border-collapse:collapse">
       <tr><th align="left">Когда</th><th align="left">Координаты</th><th></th></tr>
       {% for f in pet.finds|sort(attribute='created_at', reverse=true) %}
       <tr>
-        <td>{{ f.created_at.strftime("%d.%m.%Y %H:%M") }} UTC</td>
+        <td>{{ f.created_at.strftime("%d.%m.%Y %H:%M") }}</td>
         <td>
           {% if f.lat %}
             <a href="https://yandex.ru/maps/?pt={{ f.lon }},{{ f.lat }}&z=16&l=map" target="_blank">
               {{ "%.5f"|format(f.lat) }}, {{ "%.5f"|format(f.lon) }}
             </a>
-            {% if f.accuracy %}<span class="muted">±{{ f.accuracy|round|int }} м</span>{% endif %}
           {% else %}—{% endif %}
         </td>
         <td>
           <form method="post" action="{{ url_for('delete_find', find_id=f.id) }}">
-            <button class="danger">Удалить</button>
+            <button class="danger" style="padding:4px 8px; font-size:12px;">Удалить</button>
           </form>
         </td>
       </tr>
@@ -44,4 +89,8 @@
   {% endif %}
 </div>
 {% endfor %}
+
+<!-- Подключаем Leaflet для карт -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 {% endblock %}
