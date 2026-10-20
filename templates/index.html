@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card" style="margin-top: 40px;">
+  <h1 style="text-align: center;">PetNFC</h1>
+  <p style="text-align: center;" class="muted">Умные метки для ваших питомцев</p>
+  
+  {% if tag_code %}
+    <div class="flash" style="background:#dcfce7; color:#166534; text-align: center;">
+      Вы приложили метку <b>{{ tag_code }}</b>.<br>Войдите, чтобы привязать её к питомцу.
+    </div>
+  {% endif %}
+
+  <form method="post" style="margin-top: 20px;">
+    <label>Email или логин</label>
+    <input name="email" type="text" required placeholder="Ваш email">
+    <label>Пароль</label>
+    <input name="password" type="password" required placeholder="Ваш пароль">
+    <button style="width: 100%;">Войти</button>
+  </form>
+</div>
+{% endblock %}
