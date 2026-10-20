@@ -6,8 +6,11 @@ from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
+
+# --- ИСПРАВЛЕНИЕ ДЛЯ SERVERLESS: сохраняем данные во временную папку /tmp ---
+app.instance_path = "/tmp/instance"
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", secrets.token_hex(32))
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///petnfc.db"
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:////tmp/petnfc.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
 
@@ -182,6 +185,5 @@ def admin_new_owner():
 
 # ---------- Запуск для SpaceWeb ----------
 if __name__ == "__main__":
-    # Берём порт из переменных окружения хостинга, по умолчанию 5000
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
