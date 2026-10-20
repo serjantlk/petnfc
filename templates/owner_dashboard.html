@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h1>Мои питомцы</h1>
+  <p class="muted">Вы вошли как {{ owner.email }} · <a href="{{ url_for('owner_logout') }}">выйти</a></p>
+  <form method="post" action="{{ url_for('owner_new_pet') }}">
+    <label>Кличка нового питомца</label>
+    <input name="name" required>
+    <button>Добавить питомца</button>
+  </form>
+</div>
+
+{% for pet in owner.pets %}
+<div class="card">
+  <h2>{{ pet.name }}</h2>
+  <p class="muted">NFC-ссылка: <code>{{ request.host_url }}p/{{ pet.slug }}</code></p>
+  <p><a href="{{ url_for('owner_edit', pet_id=pet.id) }}">Редактировать паспорт</a></p>
+
+  <h3>Находки ({{ pet.finds|length }})</h3>
+  {% if pet.finds %}
+    <table style="width:100%;border-collapse:collapse">
+      <tr><th align="left">Когда</th><th align="left">Координаты</th><th></th></tr>
+      {% for f in pet.finds|sort(attribute='created_at', reverse=true) %}
+      <tr>
+        <td>{{ f.created_at.strftime("%d.%m.%Y %H:%M") }} UTC</td>
+        <td>
+          {% if f.lat %}
+            <a href="https://yandex.ru/maps/?pt={{ f.lon }},{{ f.lat }}&z=16&l=map" target="_blank">
+              {{ "%.5f"|format(f.lat) }}, {{ "%.5f"|format(f.lon) }}
+            </a>
+            {% if f.accuracy %}<span class="muted">±{{ f.accuracy|round|int }} м</span>{% endif %}
+          {% else %}—{% endif %}
+        </td>
+        <td>
+          <form method="post" action="{{ url_for('delete_find', find_id=f.id) }}">
+            <button class="danger">Удалить</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  {% else %}
+    <p class="muted">Пока никто не сканировал метку.</p>
+  {% endif %}
+</div>
+{% endfor %}
+{% endblock %}

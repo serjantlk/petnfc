@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h1>Паспорт: {{ pet.name }}</h1>
+  <form method="post">
+    <label>Кличка</label><input name="name" value="{{ pet.name }}" required>
+    <label>Вид (собака/кошка/…)</label><input name="species" value="{{ pet.species or '' }}">
+    <label>Порода</label><input name="breed" value="{{ pet.breed or '' }}">
+    <label>Окрас</label><input name="color" value="{{ pet.color or '' }}">
+    <label>Ссылка на фото (URL)</label><input name="photo_url" value="{{ pet.photo_url or '' }}">
+    <label>Особенности / заметки</label>
+    <textarea name="notes" rows="4">{{ pet.notes or '' }}</textarea>
+    <button>Сохранить</button>
+  </form>
+  <p class="muted">Контакты владельца берутся из вашего профиля (email/телефон задаёт администратор).</p>
+</div>
+{% endblock %}

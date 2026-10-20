@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h1>Админка</h1>
+  {% if not logged %}
+  <form method="post">
+    <label>Пароль администратора</label><input name="password" type="password" required>
+    <button>Войти</button>
+  </form>
+  {% else %}
+  <p><a href="{{ url_for('admin_logout') }}">Выйти</a></p>
+  <form method="post" action="{{ url_for('admin_new_owner') }}">
+    <h3>Новый владелец</h3>
+    <label>Email</label><input name="email" type="email" required>
+    <label>Пароль</label><input name="password" type="password" required>
+    <label>Имя</label><input name="name">
+    <label>Телефон</label><input name="phone">
+    <button>Создать</button>
+  </form>
+
+  <h3>Владельцы</h3>
+  <ul>
+    {% for o in owners %}
+      <li><b>{{ o.email }}</b> — {{ o.name or "—" }}, {{ o.phone or "—" }};
+        питомцев: {{ o.pets|length }}
+        <ul>
+          {% for p in o.pets %}
+            <li>{{ p.name }} — <code>/p/{{ p.slug }}</code></li>
+          {% endfor %}
+        </ul>
+      </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>
+{% endblock %}

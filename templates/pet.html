@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}{{ pet.name }} — паспорт питомца{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>{{ pet.name }}</h1>
+  {% if pet.photo_url %}<img class="pet" src="{{ pet.photo_url }}" alt="{{ pet.name }}">{% endif %}
+  <p><b>Вид:</b> {{ pet.species or "—" }}<br>
+     <b>Порода:</b> {{ pet.breed or "—" }}<br>
+     <b>Окрас:</b> {{ pet.color or "—" }}</p>
+  {% if pet.notes %}<p><b>Особенности:</b> {{ pet.notes }}</p>{% endif %}
+</div>
+
+<div class="card">
+  <h2>Владелец</h2>
+  <p><b>{{ pet.owner.name or "Владелец" }}</b><br>
+     Телефон: <a href="tel:{{ pet.owner.phone }}">{{ pet.owner.phone or "—" }}</a><br>
+     Email: <a href="mailto:{{ pet.owner.email }}">{{ pet.owner.email }}</a></p>
+</div>
+
+<div class="card" id="geo-card">
+  <h2>Помогите вернуть питомца</h2>
+  <p class="muted">Нажмите кнопку — мы отправим владельцу координаты, где вы нашли питомца.</p>
+  <button id="send-loc">Отправить моё местоположение</button>
+  <p id="geo-status" class="muted"></p>
+</div>
+
+<script>
+const slug = "{{ pet.slug }}";
+const btn = document.getElementById("send-loc");
+const status = document.getElementById("geo-status");
+
+async function sendLocation(lat, lon, accuracy) {
+  const r = await fetch("/api/find/" + slug, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({lat, lon, accuracy})
+  });
+  if (r.ok) {
+    status.textContent = "Спасибо! Координаты отправлены владельцу.";
+    btn.disabled = true;
+  } else {
+    status.textContent = "Не удалось отправить. Попробуйте ещё раз.";
+  }
+}
+
+btn.addEventListener("click", () => {
+  if (!navigator.geolocation) {
+    status.textContent = "Ваш браузер не поддерживает геолокацию.";
+    return;
+  }
+  status.textContent = "Определяем местоположение…";
+  navigator.geolocation.getCurrentPosition(
+    pos => sendLocation(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy),
+    err => { status.textContent = "Доступ к геолокации запрещён или недоступен."; },
+    {enableHighAccuracy: true, timeout: 10000}
+  );
+});
+
+// Автоматическая попытка при загрузке (браузер всё равно спросит разрешение)
+window.addEventListener("load", () => {
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      pos => sendLocation(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy),
+      () => {} // тихо игнорируем отказ
+    );
+  }
+});
+</script>
+{% endblock %}
